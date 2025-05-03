@@ -77,9 +77,28 @@ else:
         portfolio.append(cash + btc * price)
 
     st.line_chart(portfolio)
+if len(X) > sequence_length + 1:
+    predictions = (model.predict(X) > 0.5).astype(int).flatten()
+    prices = data['Close'].values[sequence_length:-1]
+    portfolio = []
+    cash = 10000
+    btc = 0
+
+    for i in range(len(prices)):
+        price = prices[i]
+        if predictions[i] == 1 and btc == 0:
+            btc = cash / price
+            cash = 0
+        elif predictions[i] == 0 and btc > 0:
+            cash = btc * price
+            btc = 0
+        portfolio.append(cash + btc * price)
+
     if len(portfolio) > 0:
-    st.line_chart(portfolio)
-    st.write(f"Sluttverdi: {portfolio[-1]:.2f} kr")
-    st.write(f"Avkastning: {((portfolio[-1] - 10000) / 100):.2f}%")
+        st.line_chart(portfolio)
+        st.write(f"Sluttverdi: {portfolio[-1]:.2f} kr")
+        st.write(f"Avkastning: {((portfolio[-1] - 10000) / 100):.2f}%")
+    else:
+        st.warning("Ingen data tilgjengelig for simulering.")
 else:
-    st.warning("Ikke nok data til å vise simulering ennå.")
+    st.warning("For lite data til å simulere strategi.")
