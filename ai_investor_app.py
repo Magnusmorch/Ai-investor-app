@@ -73,7 +73,7 @@ else:
                 btc = 0
             portfolio.append(cash + btc * price)
 
-        if len(portfolio) > 0:
+        if portfolio and isinstance(portfolio[-1], (int, float, np.number)):
             st.subheader("Simulert verdiutvikling")
             st.line_chart(portfolio)
             st.write(f"Sluttverdi: {portfolio[-1]:.2f} kr")
