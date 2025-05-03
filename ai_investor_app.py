@@ -77,4 +77,9 @@ else:
         portfolio.append(cash + btc * price)
 
     st.line_chart(portfolio)
+    if len(portfolio) > 0:
+    st.line_chart(portfolio)
     st.write(f"Sluttverdi: {portfolio[-1]:.2f} kr")
+    st.write(f"Avkastning: {((portfolio[-1] - 10000) / 100):.2f}%")
+else:
+    st.warning("Ikke nok data til å vise simulering ennå.")
