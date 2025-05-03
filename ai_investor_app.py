@@ -2,9 +2,10 @@ import streamlit as st
 import yfinance as yf
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import load_model
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.optimizers import Adam
 import matplotlib.pyplot as plt
-import datetime
 
 st.set_page_config(page_title="AI Investor", layout="wide")
 
@@ -39,18 +40,15 @@ X = np.array(X)
 y = np.array(y)
 
 if len(X) == 0:
-    st.warning("Ikke nok data til å kjøre modell.")
+    st.warning("Ikke nok data til å kjøre modellen.")
 else:
-    # Enkel modell direkte i appen
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import LSTM, Dense
-
+    # Modell
     model = Sequential([
         LSTM(50, return_sequences=True, input_shape=(X.shape[1], 1)),
         LSTM(50),
         Dense(1, activation='sigmoid')
     ])
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['accuracy'])
     model.fit(X, y, epochs=5, batch_size=16, verbose=0)
 
     pred = model.predict(X[-1].reshape(1, sequence_length, 1))[0][0]
@@ -58,47 +56,29 @@ else:
     st.subheader(f"AI-forutsier: {direction} ({pred:.2f})")
 
     # Simulering
-    st.subheader("Simulert verdiutvikling")
-    cash = 10000
-    btc = 0
-    portfolio = []
+    if X.shape[0] > sequence_length + 1:
+        predictions = (model.predict(X) > 0.5).astype(int).flatten()
+        prices = data['Close'].values[sequence_length:-1]
+        portfolio = []
+        cash = 10000
+        btc = 0
 
-    preds = (model.predict(X) > 0.5).astype(int).flatten()
-    prices = data['Close'].values[sequence_length:-1]
+        for i in range(len(prices)):
+            price = prices[i]
+            if predictions[i] == 1 and btc == 0:
+                btc = cash / price
+                cash = 0
+            elif predictions[i] == 0 and btc > 0:
+                cash = btc * price
+                btc = 0
+            portfolio.append(cash + btc * price)
 
-    for i in range(len(preds[sequence_length:-1])):
-        price = prices[i]
-        if preds[i] == 1 and btc == 0:
-            btc = cash / price
-            cash = 0
-        elif preds[i] == 0 and btc > 0:
-            cash = btc * price
-            btc = 0
-        portfolio.append(cash + btc * price)
-
-    st.line_chart(portfolio)
-if len(X) > sequence_length + 1:
-    predictions = (model.predict(X) > 0.5).astype(int).flatten()
-    prices = data['Close'].values[sequence_length:-1]
-    portfolio = []
-    cash = 10000
-    btc = 0
-
-    for i in range(len(prices)):
-        price = prices[i]
-        if predictions[i] == 1 and btc == 0:
-            btc = cash / price
-            cash = 0
-        elif predictions[i] == 0 and btc > 0:
-            cash = btc * price
-            btc = 0
-        portfolio.append(cash + btc * price)
-
-    if len(portfolio) > 0:
-        st.line_chart(portfolio)
-        st.write(f"Sluttverdi: {portfolio[-1]:.2f} kr")
-        st.write(f"Avkastning: {((portfolio[-1] - 10000) / 100):.2f}%")
+        if len(portfolio) > 0:
+            st.subheader("Simulert verdiutvikling")
+            st.line_chart(portfolio)
+            st.write(f"Sluttverdi: {portfolio[-1]:.2f} kr")
+            st.write(f"Avkastning: {((portfolio[-1] - 10000) / 100):.2f}%")
+        else:
+            st.warning("Ingen data tilgjengelig for simulering.")
     else:
-        st.warning("Ingen data tilgjengelig for simulering.")
-else:
-    st.warning("For lite data til å simulere strategi.")
+        st.warning("For lite data til å simulere strategi.")
