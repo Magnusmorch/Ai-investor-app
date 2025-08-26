@@ -1,6 +1,8 @@
 streamlit
-yfinance
-tensorflow
-scikit-learn
-matplotlib
+alpaca-trade-api
+python-dotenv
+pandas
 numpy
+yfinance
+matplotlib
+scikit-learn
