@@ -77,7 +77,7 @@ else:
             st.subheader("Simulert verdiutvikling")
             st.line_chart(portfolio)
             st.write(f"Sluttverdi: {portfolio[-1]:.2f} kr")
-            st.write(f"Avkastning: {((portfolio[-1] - 10000) / 100):.2f}%")
+            st.write(f"Avkastning: {((portfolio[-1] - 10000) / 10000):.2f}%")
         else:
             st.warning("Ingen data tilgjengelig for simulering.")
     else:
