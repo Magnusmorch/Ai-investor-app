@@ -14,10 +14,13 @@ STOP_LOSS = -0.02   # -2%
 SYMBOLS = ["AAPL", "MSFT", "GOOGL", "NVDA", "AMZN", "TSLA", "META", "UNH", "XOM", "JNJ"]
 
 # Hent API-nøkler fra miljøvariabler (GitHub secrets)
+# Alpaca API
 api = REST(
     key_id=os.environ["ALPACA_API_KEY"],
     secret_key=os.environ["ALPACA_SECRET_KEY"],
     base_url=os.environ["ALPACA_BASE_URL"]
+)
+
 )
 
 EMAIL_USER = os.environ["EMAIL_USER"]
