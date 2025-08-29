@@ -1,11 +1,23 @@
 # auto_trading_app.py
-import streamlit as st
+import os
+import time
 import yfinance as yf
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 from alpaca_trade_api.rest import REST
-import os, time
+
+# Prøv å importere Streamlit hvis tilgjengelig
+try:
+    import streamlit as st
+    USE_STREAMLIT = True
+except ImportError:
+    USE_STREAMLIT = False
+
+# === Secret helper ===
+def get_secret(key):
+    if USE_STREAMLIT:
+        return st.secrets[key]
+    return os.environ.get(key)
 
 # === Konfigurasjon ===
 MAX_TRADES_PER_DAY = 2000
@@ -15,9 +27,9 @@ SYMBOLS = ["AAPL", "MSFT", "GOOGL", "NVDA", "AMZN", "TSLA", "META", "UNH", "XOM"
 
 # Alpaca API
 api = REST(
-    key_id=st.secrets["ALPACA_API_KEY"],
-    secret_key=st.secrets["ALPACA_SECRET_KEY"],
-    base_url=st.secrets["ALPACA_BASE_URL"]
+    key_id=get_secret("ALPACA_API_KEY"),
+    secret_key=get_secret("ALPACA_SECRET_KEY"),
+    base_url=get_secret("ALPACA_BASE_URL")
 )
 
 # === Handelslogikk ===
@@ -29,7 +41,7 @@ class TradeManager:
 
     def _reset_daily(self):
         today = datetime.utcnow().date()
-        self.order_log = [t for t in self.order_log if t.date() == today]
+        self.order_log = [t for t in self.order_log if pd.to_datetime(t).date() == today]
 
     def can_trade(self):
         self._reset_daily()
@@ -64,7 +76,7 @@ trade_manager = TradeManager()
 def get_top_stock():
     growth = {}
     for symbol in SYMBOLS:
-        data = yf.download(symbol, period="5d")
+        data = yf.download(symbol, period="5d", progress=False)
         if len(data) >= 2:
             pct_change = (data["Close"].iloc[-1] - data["Close"].iloc[0]) / data["Close"].iloc[0]
             growth[symbol] = pct_change
@@ -92,11 +104,13 @@ def auto_trade():
         try:
             api.submit_order(symbol=symbol, qty=qty, side="buy", type="market", time_in_force="gtc")
             trade_manager.log_order("BUY", symbol, qty, current_price)
-            st.success(f"Kjøpt {qty} x {symbol} til {current_price:.2f}")
+            if USE_STREAMLIT:
+                st.success(f"Kjøpt {qty} x {symbol} til {current_price:.2f}")
         except Exception as e:
-            st.error(f"Feil ved kjøp: {e}")
+            if USE_STREAMLIT:
+                st.error(f"Feil ved kjøp: {e}")
 
-    # Sjekk om vi skal selge noe
+    # Sjekk posisjoner for salg
     positions = get_positions()
     for sym, entry_price in positions.items():
         current = yf.Ticker(sym).history(period="1d")["Close"].iloc[-1]
@@ -106,22 +120,27 @@ def auto_trade():
             try:
                 api.submit_order(symbol=sym, qty=qty, side="sell", type="market", time_in_force="gtc")
                 trade_manager.log_order("SELL", sym, qty, current)
-                st.warning(f"Solgte {qty} x {sym} til {current:.2f} ({change:.2%})")
+                if USE_STREAMLIT:
+                    st.warning(f"Solgte {qty} x {sym} til {current:.2f} ({change:.2%})")
             except Exception as e:
-                st.error(f"Feil ved salg: {e}")
+                if USE_STREAMLIT:
+                    st.error(f"Feil ved salg: {e}")
 
 # === UI ===
-st.title("AI-Investor 2.0 – Automatisk Trading")
-st.write("Appen handler automatisk ut fra AI-vekstanalyse og følger Oljefond-inspirerte aksjer.")
+if USE_STREAMLIT:
+    st.title("AI-Investor 2.0 – Automatisk Trading")
+    st.write("Appen handler automatisk ut fra AI-vekstanalyse og følger Oljefond-inspirerte aksjer.")
 
-if st.button("🚀 Kjør automatisk handel nå"):
+    if st.button("🚀 Kjør automatisk handel nå"):
+        auto_trade()
+
+    st.write("\n📈 Dagens vurdering:")
+    top = get_top_stock()
+    st.write(f"Beste aksje akkurat nå: **{top}**")
+
+    if os.path.exists("tradelog.csv"):
+        st.write("\n🧾 Handelslogg:")
+        log = pd.read_csv("tradelog.csv")
+        st.dataframe(log.tail(10))
+else:
     auto_trade()
-
-st.write("\n📈 Dagens vurdering:")
-top = get_top_stock()
-st.write(f"Beste aksje akkurat nå: **{top}**")
-
-if os.path.exists("tradelog.csv"):
-    st.write("\n🧾 Handelslogg:")
-    log = pd.read_csv("tradelog.csv")
-    st.dataframe(log.tail(10))
