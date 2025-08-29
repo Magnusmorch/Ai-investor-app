@@ -1,23 +1,11 @@
 # auto_trading_app.py
-import os
-import time
+import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from alpaca_trade_api.rest import REST
-
-# Prøv å importere Streamlit hvis tilgjengelig
-try:
-    import streamlit as st
-    USE_STREAMLIT = True
-except ImportError:
-    USE_STREAMLIT = False
-
-# === Secret helper ===
-def get_secret(key):
-    if USE_STREAMLIT:
-        return st.secrets[key]
-    return os.environ.get(key)
+import os
 
 # === Konfigurasjon ===
 MAX_TRADES_PER_DAY = 2000
@@ -25,12 +13,16 @@ TAKE_PROFIT = 0.03  # 3%
 STOP_LOSS = -0.02   # -2%
 SYMBOLS = ["AAPL", "MSFT", "GOOGL", "NVDA", "AMZN", "TSLA", "META", "UNH", "XOM", "JNJ"]
 
-# Alpaca API
+# Hent API-nøkler fra miljøvariabler (GitHub secrets)
 api = REST(
-    key_id=get_secret("ALPACA_API_KEY"),
-    secret_key=get_secret("ALPACA_SECRET_KEY"),
-    base_url=get_secret("ALPACA_BASE_URL")
+    key_id=os.environ["ALPACA_API_KEY"],
+    secret_key=os.environ["ALPACA_SECRET_KEY"],
+    base_url=os.environ["ALPACA_BASE_URL"]
 )
+
+EMAIL_USER = os.environ["EMAIL_USER"]
+EMAIL_PASS = os.environ["EMAIL_PASS"]
+EMAIL_RECEIVER = os.environ["EMAIL_RECEIVER"]
 
 # === Handelslogikk ===
 class TradeManager:
@@ -41,7 +33,7 @@ class TradeManager:
 
     def _reset_daily(self):
         today = datetime.utcnow().date()
-        self.order_log = [t for t in self.order_log if pd.to_datetime(t).date() == today]
+        self.order_log = [t for t in self.order_log if t.date() == today]
 
     def can_trade(self):
         self._reset_daily()
@@ -76,7 +68,7 @@ trade_manager = TradeManager()
 def get_top_stock():
     growth = {}
     for symbol in SYMBOLS:
-        data = yf.download(symbol, period="5d", progress=False)
+        data = yf.download(symbol, period="5d")
         if len(data) >= 2:
             pct_change = (data["Close"].iloc[-1] - data["Close"].iloc[0]) / data["Close"].iloc[0]
             growth[symbol] = pct_change
@@ -104,13 +96,11 @@ def auto_trade():
         try:
             api.submit_order(symbol=symbol, qty=qty, side="buy", type="market", time_in_force="gtc")
             trade_manager.log_order("BUY", symbol, qty, current_price)
-            if USE_STREAMLIT:
-                st.success(f"Kjøpt {qty} x {symbol} til {current_price:.2f}")
+            st.success(f"Kjøpt {qty} x {symbol} til {current_price:.2f}")
         except Exception as e:
-            if USE_STREAMLIT:
-                st.error(f"Feil ved kjøp: {e}")
+            st.error(f"Feil ved kjøp: {e}")
 
-    # Sjekk posisjoner for salg
+    # Sjekk om vi skal selge noe
     positions = get_positions()
     for sym, entry_price in positions.items():
         current = yf.Ticker(sym).history(period="1d")["Close"].iloc[-1]
@@ -120,27 +110,22 @@ def auto_trade():
             try:
                 api.submit_order(symbol=sym, qty=qty, side="sell", type="market", time_in_force="gtc")
                 trade_manager.log_order("SELL", sym, qty, current)
-                if USE_STREAMLIT:
-                    st.warning(f"Solgte {qty} x {sym} til {current:.2f} ({change:.2%})")
+                st.warning(f"Solgte {qty} x {sym} til {current:.2f} ({change:.2%})")
             except Exception as e:
-                if USE_STREAMLIT:
-                    st.error(f"Feil ved salg: {e}")
+                st.error(f"Feil ved salg: {e}")
 
 # === UI ===
-if USE_STREAMLIT:
-    st.title("AI-Investor 2.0 – Automatisk Trading")
-    st.write("Appen handler automatisk ut fra AI-vekstanalyse og følger Oljefond-inspirerte aksjer.")
+st.title("AI-Investor 2.0 – Automatisk Trading")
+st.write("Appen handler automatisk ut fra AI-vekstanalyse og følger Oljefond-inspirerte aksjer.")
 
-    if st.button("🚀 Kjør automatisk handel nå"):
-        auto_trade()
-
-    st.write("\n📈 Dagens vurdering:")
-    top = get_top_stock()
-    st.write(f"Beste aksje akkurat nå: **{top}**")
-
-    if os.path.exists("tradelog.csv"):
-        st.write("\n🧾 Handelslogg:")
-        log = pd.read_csv("tradelog.csv")
-        st.dataframe(log.tail(10))
-else:
+if st.button("🚀 Kjør automatisk handel nå"):
     auto_trade()
+
+st.write("\n📈 Dagens vurdering:")
+top = get_top_stock()
+st.write(f"Beste aksje akkurat nå: **{top}**")
+
+if os.path.exists("tradelog.csv"):
+    st.write("\n🧾 Handelslogg:")
+    log = pd.read_csv("tradelog.csv")
+    st.dataframe(log.tail(10))
